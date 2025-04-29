@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"github.com/worldiety/nago-runner/setup"
 	"log"
+	"os"
 )
 
 func configure() error {
@@ -20,7 +21,7 @@ func configure() error {
 
 	flags.StringVar(&cfg.URL, "url", "ws://localhost:3000/api/v1/runner", "URL to a worldiety hub instance")
 	flags.StringVar(&cfg.Token, "token", "", "Token to a worldiety hub instance")
-	if err := flags.Parse(flag.Args()[1:]); err != nil {
+	if err := flags.Parse(os.Args[1:]); err != nil {
 		log.Fatal(err)
 	}
 

@@ -11,19 +11,18 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"os"
 	"runtime"
 )
 
 func main() {
-	flag.Parse()
-
 	if err := realMain(); err != nil {
 		log.Fatal(err)
 	}
 }
 
 func realMain() error {
-	if len(flag.Args()) == 0 {
+	if len(os.Args[1:]) == 0 {
 		return runService()
 	}
 
@@ -31,7 +30,7 @@ func realMain() error {
 		return fmt.Errorf("unsupported platform: %s", runtime.GOOS)
 	}
 
-	switch flag.Args()[0] {
+	switch os.Args[len(os.Args)-1] {
 	case "configure":
 		return configure()
 	case "install":
