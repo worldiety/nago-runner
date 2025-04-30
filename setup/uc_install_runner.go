@@ -9,10 +9,12 @@ package setup
 
 import (
 	"fmt"
-	"github.com/worldiety/nago-runner/pkg/linux"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
+
+	"github.com/worldiety/nago-runner/pkg/linux"
 )
 
 const unixRunnerUserName = "nago-runner"
@@ -61,6 +63,7 @@ func NewInstallRunner() InstallRunner {
 
 		// simple go build of this nago-runner
 		cmd := exec.Command("go", "install", "github.com/worldiety/nago-runner/cmd/nago-runner@latest")
+		cmd.Env = slices.Clone(os.Environ())
 		cmd.Env = append(cmd.Env, "GOPROXY=direct")
 		if buf, err := cmd.CombinedOutput(); err != nil {
 			return fmt.Errorf("go install failed: %w: %s", err, string(buf))
@@ -74,6 +77,10 @@ func NewInstallRunner() InstallRunner {
 		execGoPath := filepath.Join(myHome, "go", "bin", "nago-runner")
 
 		_ = linux.ServiceStop(systemdNagoRunnerName)
+
+		if err := linux.Chown(cfgJson, unixRunnerUserName); err != nil {
+			return fmt.Errorf("cannot chown config file: %w", err)
+		}
 
 		if err := os.Rename(execGoPath, locationNagoRunnerBin); err != nil {
 			return fmt.Errorf("cannot rename nago-runner binary: %w: %s->%s", err, execGoPath, locationNagoRunnerBin)

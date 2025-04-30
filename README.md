@@ -17,7 +17,7 @@ Installing a runner on a new machine is as simple as the following 3 steps on a 
 sudo apt install golang -y
 
 # configure the nago runner
-sudo go run github.com/worldiety/nago-runner/cmd/nago-runner@latest -- -url=localhost -token=1234 configure 
+sudo go run github.com/worldiety/nago-runner/cmd/nago-runner@latest -url=localhost -token=1234 configure 
 
 # install the nago runner
 sudo go run github.com/worldiety/nago-runner/cmd/nago-runner@latest -- install

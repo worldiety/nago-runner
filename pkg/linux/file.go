@@ -68,7 +68,7 @@ func ApplyFile(file File) Result {
 		return Result{Error: fmt.Errorf("could not write tmp file: %s: %w", file.Filename, err)}
 	}
 
-	if err := os.Rename(file.Filename, tmp); err != nil {
+	if err := os.Rename(tmp, file.Filename); err != nil {
 		return Result{Error: fmt.Errorf("could not rename %s: %w", file.Filename, err)}
 	}
 
