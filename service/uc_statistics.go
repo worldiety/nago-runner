@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-func NewStatistics() Statistics {
+func NewStatistics(deployments FindDeployments) Statistics {
 	return func() event.StatisticsUpdated {
 		var res event.StatisticsUpdated
 
@@ -54,6 +54,15 @@ func NewStatistics() Statistics {
 				RSS:        memUsage,
 			})
 
+		}
+
+		dpls, err := deployments()
+		if err != nil {
+			slog.Error("Error getting deployments", "err", err.Error())
+		}
+
+		for _, dpl := range dpls {
+			res.Deployments = append(res.Deployments, event.Deployment(dpl))
 		}
 
 		return res

@@ -17,20 +17,44 @@ type Hello func(evt event.ConnectionCreated) event.RunnerLaunched
 type Statistics func() event.StatisticsUpdated
 type SchedulerStatistics func(ctx context.Context)
 
-type UseCases struct {
-	Hello              Hello
-	Statistics         Statistics
-	ScheduleStatistics SchedulerStatistics
+type Deployment struct {
+	AppID           string `json:"appID"`
+	BinaryID        string `json:"binaryID"`
+	OrgSlug         string `json:"orgSlug"`
+	AppSlug         string `json:"appSlug"`
+	BinarySha256    string `json:"binarySha256"`
+	MaxMemoryMiB    int    `json:"maxMemory"`   // e.g. 512 for 512 MiB
+	MaxCPUQuota     int    `json:"maxCPUQuota"` // range 1-100 percent
+	TimeoutStartSec int    `json:"timeoutStartSec"`
+	Port            int    `json:"port"`
 }
+
+type ApplyDefaultContainer func() (dir string, err error)
+
+type FindDeployments func() ([]Deployment, error)
+
+type UseCases struct {
+	Hello                 Hello
+	Statistics            Statistics
+	ScheduleStatistics    SchedulerStatistics
+	ApplyDefaultContainer ApplyDefaultContainer
+	ApplyService          ApplyService
+	FindDeployments       FindDeployments
+}
+
+type ApplyService func(deployment Deployment) error
 
 func NewUseCases(bus event.Bus) UseCases {
 
-	statisticsFn := NewStatistics()
+	findDeploymentsFn := NewFindDeployments()
+	statisticsFn := NewStatistics(findDeploymentsFn)
 
 	uc := UseCases{
-		Hello:              NewHello(),
-		Statistics:         statisticsFn,
-		ScheduleStatistics: NewSchedulerStatistics(bus, statisticsFn),
+		Hello:                 NewHello(),
+		Statistics:            statisticsFn,
+		ScheduleStatistics:    NewSchedulerStatistics(bus, statisticsFn),
+		ApplyDefaultContainer: NewApplyDefaultContainer(),
+		ApplyService:          NewApplyService(),
 	}
 
 	bus.Subscribe(func(evt event.Event) {

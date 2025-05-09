@@ -40,7 +40,7 @@ func runService() error {
 	}()
 
 	bus := gorilla.NewWebsocketBus(cfg.URL, cfg.Token)
-	ucService := service.NewUseCases(bus)
+	launch(ctx, bus)
 
 	go func() {
 		if err := bus.Run(ctx); err != nil {
@@ -49,11 +49,21 @@ func runService() error {
 		}
 	}()
 
-	ucService.ScheduleStatistics(ctx)
-
 	select {
 	case <-ctx.Done():
 		return nil
 	}
 
+}
+
+func launch(ctx context.Context, bus *gorilla.WebsocketBus) {
+	ucService := service.NewUseCases(bus)
+	ucService.ScheduleStatistics(ctx)
+	containerDir, err := ucService.ApplyDefaultContainer()
+	if err != nil {
+		slog.Error("cannot apply default container", "err", err.Error())
+		return
+	}
+
+	slog.Info("configured container", "containerDir", containerDir)
 }
