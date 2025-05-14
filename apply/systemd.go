@@ -8,25 +8,39 @@
 package apply
 
 import (
+	"errors"
 	"fmt"
 	"github.com/worldiety/nago-runner/configuration"
 	"github.com/worldiety/nago-runner/pkg/run"
 	"io"
 	"log/slog"
+	"net/http"
 	"os"
 	"path/filepath"
 )
 
-func Systemd(appCfg configuration.Application, s3open S3Open) error {
+func Systemd(token string, appCfg configuration.Application, s3open S3Open) error {
 	cfg := appCfg.Sandbox.Systemd
 	if cfg.State == configuration.Disabled {
 		// ignore
 		return nil
 	}
 
-	systemdFile := fmt.Sprintf("/etc/systemd/system/%s.service", cfg.Name)
+	serviceName := cfg.Name
+	systemdFile := fmt.Sprintf("/etc/systemd/system/%s.service", serviceName)
 
 	if cfg.State == configuration.Absent {
+
+		if serviceName != "" {
+			if err := run.Command("sudo", "systemctl", "stop", serviceName); err != nil {
+				slog.Error("failed to stop systemd service", "service", serviceName, "err", err.Error())
+			}
+
+			if err := run.Command("sudo", "systemctl", "disable", serviceName); err != nil {
+				slog.Error("systemctl disable failed", "service", serviceName, "err", err.Error())
+			}
+		}
+
 		if _, err := os.Stat(systemdFile); os.IsNotExist(err) {
 			return nil
 		}
@@ -48,12 +62,20 @@ func Systemd(appCfg configuration.Application, s3open S3Open) error {
 	tmp += "After=network.target\n\n"
 
 	tmp += "[Service]\n"
-	execCmd, err := systemdExecStart(appCfg, s3open)
+	execCmd, err := systemdExecStart(token, appCfg, s3open)
 	if err != nil {
 		return fmt.Errorf("systemd exec start command generation failed: %w", err)
 	}
 
-	tmp += execCmd
+	if !appCfg.Sandbox.Systemd.NSpawn.Enabled {
+		// todo fixme
+		for _, env := range appCfg.Sandbox.Systemd.NSpawn.Envs {
+			tmp += fmt.Sprintf("Environment=%s=%s\n", env.Key, env.Value)
+		}
+	}
+
+	tmp += "ExecStart=" + execCmd
+	tmp += "\n\n"
 
 	// sandbox
 	if cfg.CapabilityBoundingSet != "" {
@@ -113,7 +135,6 @@ func Systemd(appCfg configuration.Application, s3open S3Open) error {
 		return fmt.Errorf("error reloading systemd daemon: %w", err)
 	}
 
-	serviceName := appCfg.Sandbox.Systemd.Name
 	if err := run.Command("sudo", "systemctl", "enable", serviceName); err != nil {
 		return fmt.Errorf("error enabling systemd service: %s: %w", serviceName, err)
 	}
@@ -127,14 +148,8 @@ func Systemd(appCfg configuration.Application, s3open S3Open) error {
 	return nil
 }
 
-func systemdExecStart(appCfg configuration.Application, s3open S3Open) (string, error) {
+func systemdExecStart(token string, appCfg configuration.Application, s3open S3Open) (string, error) {
 	cfg := appCfg.Sandbox.Systemd
-
-	if !cfg.NSpawn.Enabled {
-		// the no-nspawn case, where the binary is deployed and started without any isolation, which is
-		// totally valid for embedded or one service per machine use cases
-		return "", fmt.Errorf("nspawn deployment is not yet implemented")
-	}
 
 	deploymentDir := fmt.Sprintf("/opt/%s/%s/", appCfg.OrganizationSlug, appCfg.ApplicationSlug)
 	var binaryFilePath string
@@ -151,7 +166,7 @@ func systemdExecStart(appCfg configuration.Application, s3open S3Open) (string, 
 
 			dstFile := filepath.Join(deploymentDir, string(file.Path))
 			hash, err := Sha3(dstFile)
-			if err != nil && !os.IsNotExist(err) {
+			if err != nil && !errors.Is(err, os.ErrNotExist) {
 				return "", fmt.Errorf("error hashing file %s: %w", file.Path, err)
 			}
 
@@ -161,15 +176,36 @@ func systemdExecStart(appCfg configuration.Application, s3open S3Open) (string, 
 			}
 
 			if hash == file.Hash {
+				slog.Info("artifact file %s is already up-to-date", file.Path)
 				continue
 			}
 
-			r, err := OpenByHash(s3open, appCfg.Artifacts.S3, hash)
+			// TODO still a good idea? What about just passing urls which is even more flexible?
+			/*r, err := OpenByHash(s3open, appCfg.Artifacts.S3, hash)
 			if err != nil {
 				return "", fmt.Errorf("error opening file %s: %w", file.Path, err)
 			}
 
-			defer r.Close()
+			defer r.Close()*/
+
+			req, err := http.NewRequest("GET", string(file.URL), nil)
+			if err != nil {
+				return "", fmt.Errorf("error creating file request %s: %w", file.Path, err)
+			}
+			req.Header.Set("Authorization", "Bearer "+token)
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				return "", fmt.Errorf("error downloading file %s: %w", file.Path, err)
+			}
+
+			if resp.StatusCode != 200 {
+				return "", fmt.Errorf("error downloading file %s: status code %d", file.Path, resp.StatusCode)
+			}
+
+			defer resp.Body.Close()
+			r := resp.Body
+
+			_ = os.MkdirAll(filepath.Dir(dstFile), 0755)
 
 			w, err := os.OpenFile(dstFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
 			if err != nil {
@@ -205,28 +241,39 @@ func systemdExecStart(appCfg configuration.Application, s3open S3Open) (string, 
 		return "", fmt.Errorf("artifacts do not contain any executable")
 	}
 
+	if !cfg.NSpawn.Enabled {
+		// the no-nspawn case, where the binary is deployed and started without any isolation, which is
+		// totally valid for embedded or one service per machine use cases
+		return filepath.Join(deploymentDir, string(binaryFile.Path)), nil
+	}
+
 	nspawn := appCfg.Sandbox.Systemd.NSpawn
 	container := nspawn.Debootstrap
 	if container.State != configuration.Present {
 		return "", fmt.Errorf("systemd debootstrap required but not present")
 	}
-	tmp := "/usr/bin/systemd-nspawn \\n"
-	tmp += fmt.Sprintf("    --machine=%s\\n", appCfg.Sandbox.Systemd.Name)
-	tmp += fmt.Sprintf("    --directory=%s\\n", container.Target())
-	tmp += fmt.Sprintf("    --bind=%s:/app\\n", deploymentDir)
+	tmp := "/usr/bin/systemd-nspawn \\\n"
+	tmp += fmt.Sprintf("    --machine=%s\\\n", appCfg.Sandbox.Systemd.Name)
+	tmp += fmt.Sprintf("    --directory=%s\\\n", container.Target())
+	tmp += fmt.Sprintf("    --bind=%s:/app\\\n", deploymentDir)
 	for _, mount := range nspawn.BindMounts {
-		tmp += fmt.Sprintf("    --bind=%s:%s\\n", mount.Host, mount.Container)
+		tmp += fmt.Sprintf("    --bind=%s:%s\\\n", mount.Host, mount.Container)
 	}
 
 	for _, env := range nspawn.Envs {
-		tmp += fmt.Sprintf("    --bind=%s=%s\\n", env.Key, env.Value)
+		tmp += fmt.Sprintf("    --setenv=%s=%s\\\n", env.Key, env.Value)
 	}
 
 	if nspawn.ChDir != "" {
-		tmp += fmt.Sprintf("    --chdir=%s\\n", nspawn.ChDir)
+		tmp += fmt.Sprintf("    --chdir=%s\\\n", nspawn.ChDir)
 	}
 
-	tmp += fmt.Sprintf("%s\n\n", filepath.Join("/app/%s", string(binaryFile.Path)))
+	//tmp += fmt.Sprintf("%s\n\n", filepath.Join("/app/", string(binaryFile.Path)))
+
+	_ = binaryFile
+	if true {
+		tmp += fmt.Sprintf("    /bin/bash -c /app/testbin\\\n")
+	}
 
 	return tmp, nil
 }

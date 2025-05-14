@@ -10,6 +10,7 @@ package setup
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -19,6 +20,7 @@ func NewLoadSettings() LoadSettings {
 	return func() (Settings, error) {
 		var cfgJsonPath string
 		if runtime.GOOS != "linux" {
+			slog.Info("running on unsupported operating system")
 			myHome, err := os.UserHomeDir()
 			if err != nil {
 				return Settings{}, fmt.Errorf("cannot determine user home directory: %w", err)

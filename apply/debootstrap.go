@@ -16,11 +16,12 @@ import (
 )
 
 func Debootstrap(cfg configuration.Debootstrap) error {
+	slog := slog.With("configure", "debootstrap")
+
 	if cfg.State == configuration.Disabled {
+		slog.Info("disabled")
 		return nil
 	}
-
-	slog := slog.With("configure", "debootstrap")
 
 	configFile := string(cfg.Target() + ".json")
 	containerDir := string(cfg.Target())

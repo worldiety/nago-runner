@@ -89,6 +89,7 @@ type FileSet struct {
 // It is intended to be restored within the context of a sandbox.
 type File struct {
 	Path Path     `json:"path,omitempty"`
+	URL  URL      `json:"url,omitempty"`
 	Size int64    `json:"size,omitempty"`
 	Hash Sha3V512 `json:"hash,omitempty"`
 	// Executable is true to indicate an (ELF) binary.
@@ -111,16 +112,18 @@ type Application struct {
 }
 
 type ReverseProxy struct {
-	Rules []Rule `json:"rules"`
+	Enabled bool   `json:"enabled,omitempty"`
+	Rules   []Rule `json:"rules"`
 }
 
 type Rule struct {
 	// Location is like myapp.com or myapp.mycompany.nago.app
-	Location Domain `json:"location"`
-	Host     string `json:"host"`
-	Port     int    `json:"port"`
+	Location Domain `json:"location,omitempty"`
+	Host     string `json:"host,omitempty"`
+	Port     int    `json:"port,omitempty"`
 	// If redirect is true, this does not apply proxy pass rules, but instead applies a http redirect
-	Redirect bool `json:"redirect"`
+	Redirect       bool   `json:"redirect,omitempty"`
+	RedirectTarget string `json:"redirectTarget,omitempty"`
 }
 
 type Domain string
@@ -173,11 +176,9 @@ type Filesystem struct {
 }
 
 type Systemd struct {
-	Name  string `json:"name"`
-	State State  `json:"state"`
-	// ExecStart within the context of the systemd sandbox.
-	ExecStart Path   `json:"execStart,omitempty"`
-	NSpawn    NSpawn `json:"NSpawn"`
+	Name   string `json:"name"`
+	State  State  `json:"state"`
+	NSpawn NSpawn `json:"NSpawn"`
 
 	// e.g. control-group
 	KillMode     string      `json:"killMode,omitempty"`
@@ -197,8 +198,6 @@ type Systemd struct {
 	// cgroup
 	MemoryMax MemoryMiB `json:"memoryMax,omitempty"`
 	CPUQuota  Percent   `json:"CPUQuota,omitempty"`
-
-	Machine DebootstrapID `json:"machine"`
 }
 
 type DebootstrapID string
@@ -206,7 +205,6 @@ type DebootstrapID string
 type Debootstrap struct {
 	ID    DebootstrapID `json:"id"`
 	State State         `json:"state,omitempty"`
-	Dir   Path          `json:"dir,omitempty"`
 	// minbase|buildd|fakechroot, you probably want minbase
 	Variant string `json:"variant,omitempty"`
 	// e.g. plucky

@@ -9,6 +9,7 @@ package run
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"io"
 	"log/slog"
@@ -37,6 +38,20 @@ func Command(command string, args ...string) error {
 	go logOutput(stderrPipe, slog.LevelError)
 
 	return cmd.Wait()
+}
+
+func CommandString(command string, args ...string) (string, error) {
+	slog.Info("exec", command, strings.Join(args, " "))
+	cmd := exec.Command(command, args...)
+	var buf bytes.Buffer
+	cmd.Stdout = &buf
+	cmd.Stderr = &buf
+
+	if err := cmd.Run(); err != nil {
+		return buf.String(), err
+	}
+
+	return strings.TrimSpace(buf.String()), nil
 }
 
 func logOutput(pipe io.ReadCloser, level slog.Level) {

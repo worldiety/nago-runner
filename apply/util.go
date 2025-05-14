@@ -17,6 +17,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"reflect"
 )
 
@@ -82,4 +83,26 @@ func Sha3(file string) (configuration.Sha3V512, error) {
 	}
 
 	return configuration.Sha3V512(hex.EncodeToString(h.Sum(nil))), nil
+}
+
+func WriteFile(name string, data []byte, perm os.FileMode) error {
+	if _, err := os.Stat(filepath.Dir(name)); os.IsNotExist(err) {
+		if err := os.MkdirAll(filepath.Dir(name), 0755); err != nil {
+			return err
+		}
+	}
+
+	tmpF := name + ".tmp"
+
+	if err := os.WriteFile(tmpF, data, perm); err != nil {
+		_ = os.Remove(tmpF)
+		return err
+	}
+
+	if err := os.Rename(tmpF, name); err != nil {
+		_ = os.Remove(tmpF)
+		return err
+	}
+
+	return nil
 }

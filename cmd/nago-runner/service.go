@@ -10,7 +10,9 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/worldiety/nago-runner/apply"
 	"github.com/worldiety/nago-runner/service"
+	"github.com/worldiety/nago-runner/service/event"
 	"github.com/worldiety/nago-runner/service/event/gorilla"
 	"github.com/worldiety/nago-runner/setup"
 	"log/slog"
@@ -35,12 +37,16 @@ func runService() error {
 	go func() {
 		select {
 		case <-interrupt:
+			slog.Info("interrupt received")
 			cancel()
 		}
 	}()
 
-	bus := gorilla.NewWebsocketBus(cfg.URL, cfg.Token)
-	launch(ctx, bus)
+	endpoints := cfg.Endpoints()
+
+	bus := gorilla.NewWebsocketBus(endpoints.RunnerWebsocket, cfg.Token)
+
+	launch(ctx, bus, cfg)
 
 	go func() {
 		if err := bus.Run(ctx); err != nil {
@@ -56,14 +62,22 @@ func runService() error {
 
 }
 
-func launch(ctx context.Context, bus *gorilla.WebsocketBus) {
+func launch(ctx context.Context, bus *gorilla.WebsocketBus, settings setup.Settings) {
 	ucService := service.NewUseCases(bus)
 	ucService.ScheduleStatistics(ctx)
-	containerDir, err := ucService.ApplyDefaultContainer()
-	if err != nil {
-		slog.Error("cannot apply default container", "err", err.Error())
-		return
-	}
 
-	slog.Info("configured container", "containerDir", containerDir)
+	bus.Subscribe(func(obj event.Event) {
+		if _, ok := obj.(event.RunnerConfigurationChanged); ok {
+			cfg, err := apply.QueryConfiguration(settings)
+			if err != nil {
+				slog.Error("cannot load configuration", "err", err.Error())
+				return
+			}
+
+			if err := apply.All(settings, cfg); err != nil {
+				slog.Error("cannot apply configuration", "err", err.Error())
+			}
+		}
+	})
+
 }

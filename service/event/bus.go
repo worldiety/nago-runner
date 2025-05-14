@@ -13,6 +13,7 @@ var (
 	_ = enum.Variant[Event, ConnectionCreated]()
 	_ = enum.Variant[Event, RunnerLaunched]()
 	_ = enum.Variant[Event, StatisticsUpdated]()
+	_ = enum.Variant[Event, RunnerConfigurationChanged]()
 )
 
 type Bus interface {

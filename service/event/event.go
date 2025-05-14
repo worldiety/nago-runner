@@ -56,3 +56,9 @@ type DeploymentRequired struct {
 }
 
 func (e DeploymentRequired) isEvent() {}
+
+type RunnerConfigurationChanged struct {
+	RunnerID string `json:"runnerID"`
+}
+
+func (e RunnerConfigurationChanged) isEvent() {}
