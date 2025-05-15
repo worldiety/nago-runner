@@ -52,12 +52,12 @@ func Caddy(cfg configuration.Runner) error {
 	}
 
 	caddyFile := "/etc/caddy/Caddyfile"
-	if EqualBuf(caddyFile, []byte(tmp)) {
+	if linux.EqualBuf(caddyFile, []byte(tmp)) {
 		slog.Info("caddy configuration unchanged")
 		return nil
 	}
 
-	if err := WriteFile(caddyFile, []byte(tmp), 0644); err != nil {
+	if err := linux.WriteFile(caddyFile, []byte(tmp), 0644); err != nil {
 		return fmt.Errorf("caddyfile: failed to write caddy file to %s: %s", caddyFile, err)
 	}
 

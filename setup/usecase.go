@@ -73,6 +73,27 @@ type Endpoints struct {
 	RunnerConfiguration string
 }
 
+func (e Endpoints) Http(path string) string {
+	var sb strings.Builder
+	if e.SSL {
+		sb.WriteString("https://")
+	} else {
+		sb.WriteString("http://")
+	}
+	sb.WriteString(e.Host)
+	if e.Port != 0 {
+		sb.WriteString(":")
+		sb.WriteString(strconv.Itoa(e.Port))
+	}
+	if !strings.HasPrefix(path, "/") {
+		sb.WriteString("/")
+	}
+
+	sb.WriteString(path)
+
+	return sb.String()
+}
+
 type ApplySettings func(Settings) linux.Result
 
 type LoadSettings func() (Settings, error)

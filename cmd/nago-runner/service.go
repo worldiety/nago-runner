@@ -11,6 +11,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/worldiety/nago-runner/apply"
+	"github.com/worldiety/nago-runner/apply/systemd"
 	"github.com/worldiety/nago-runner/service"
 	"github.com/worldiety/nago-runner/service/event"
 	"github.com/worldiety/nago-runner/service/event/gorilla"
@@ -74,9 +75,10 @@ func launch(ctx context.Context, bus *gorilla.WebsocketBus, settings setup.Setti
 				return
 			}
 
-			if err := apply.All(settings, cfg); err != nil {
-				slog.Error("cannot apply configuration", "err", err.Error())
+			if err := systemd.Apply(slog.Default(), settings, cfg); err != nil {
+				slog.Error("cannot apply systemd configuration", "err", err.Error())
 			}
+
 		}
 	})
 

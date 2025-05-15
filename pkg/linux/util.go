@@ -5,7 +5,7 @@
 //
 // SPDX-License-Identifier: Custom-License
 
-package apply
+package linux
 
 import (
 	"bytes"
@@ -69,9 +69,19 @@ func WriteJSON[T any](path string, obj T) error {
 	return nil
 }
 
+func Sha3Bytes(buf []byte) (configuration.Sha3V512, error) {
+	h := sha3.New512()
+	_, _ = h.Write(buf)
+	return configuration.Sha3V512(hex.EncodeToString(h.Sum(nil))), nil
+}
+
 func Sha3(file string) (configuration.Sha3V512, error) {
 	r, err := os.Open(file)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+
 		return "", fmt.Errorf("failed to open file: %s: %w", file, err)
 	}
 
