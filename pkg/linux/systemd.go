@@ -28,7 +28,8 @@ After=network.target
 
 [Service]
 Type=simple
-User=%s
+# we need full root rights to manage and control the machine
+# User=%s 
 ExecStart=%s
 Restart=always
 Environment=%s
