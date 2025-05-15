@@ -318,6 +318,10 @@ type ServiceSection struct {
 	// most services that do not need to read from or write to the kernel log ring buffer.
 	ProtectKernelLogs bool `json:"protectKernelLogs,omitempty"`
 
+	// Takes a boolean argument. When set, sets up a new UTS namespace for the executed processes.
+	// In addition, changing hostname or domainname is prevented. Defaults to off.
+	ProtectHostname bool `json:"protectHostname,omitempty"`
+
 	// Takes a boolean argument or the special values "private" or "strict". If true, the Linux Control Groups
 	// (cgroups(7)) hierarchies accessible through /sys/fs/cgroup/ will be made read-only to all processes of the unit.
 	// If set to "private", the unit will run in a cgroup namespace with a private writable mount of /sys/fs/cgroup/.

@@ -136,6 +136,14 @@ func updateSystemd(logger *slog.Logger, settings setup.Settings, cfg configurati
 		f.WriteString("ProtectClock=yes\n")
 	}
 
+	if service.ProtectKernelLogs {
+		f.WriteString("ProtectKernelLogs=yes\n")
+	}
+
+	if service.ProtectHostname {
+		f.WriteString("ProtectHostname=yes\n")
+	}
+
 	if service.SetLoginEnvironment {
 		f.WriteString("SetLoginEnvironment=yes\n")
 	}
