@@ -26,7 +26,7 @@ func createOrUpdateService(logger *slog.Logger, settings setup.Settings, cfg con
 		return Service{}, false, fmt.Errorf("failed to update systemd unit: %w", err)
 	}
 
-	service, err := ParseService(logger, filepath.Join(systemdConfDir, string(cfg.Sandbox.Unit.Unit.Name)))
+	service, err := ParseService(logger, filepath.Join(systemdConfDir, string(cfg.Sandbox.Unit.Unit.Name)+".service"))
 	if err != nil {
 		return Service{}, false, fmt.Errorf("cannot parse systemd conf file: %s: %w", cfg.Sandbox.Unit.Unit.Name, err)
 	}
