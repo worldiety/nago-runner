@@ -83,7 +83,7 @@ func categorizeServices(logger *slog.Logger, cfg configuration.Runner) (keep []S
 		}
 
 		stillAvailable := slices.ContainsFunc(cfg.Applications, func(app configuration.Application) bool {
-			return string(app.Sandbox.Unit.Unit.Name) == service.Name()
+			return app.InstID == service.Name()
 		})
 
 		if stillAvailable {

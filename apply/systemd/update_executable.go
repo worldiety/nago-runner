@@ -24,11 +24,11 @@ import (
 // updateExecutable inspects the declared executable artifacts and creates or replaces any existing
 // executable with the given version or does nothing if it already matches (returns false and no error).
 func updateExecutable(logger *slog.Logger, settings setup.Settings, cfg configuration.Application) (bool, error) {
-	if !cfg.Sandbox.Unit.Unit.Name.Valid() {
-		return false, fmt.Errorf("invalid systemd unit name: %s", cfg.Sandbox.Unit.Unit.Name)
+	if !configuration.Name(cfg.InstID).Valid() {
+		return false, fmt.Errorf("invalid systemd unit name: %s", cfg.InstID)
 	}
 
-	fakeService := NewService(string(cfg.Sandbox.Unit.Unit.Name))
+	fakeService := NewService(cfg.InstID)
 	paths := fakeService.Paths()
 	hash, err := linux.Sha3(paths.ExecFilename)
 	if err != nil {

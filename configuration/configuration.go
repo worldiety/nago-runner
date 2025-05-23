@@ -103,18 +103,15 @@ type Executable struct {
 	Hash Sha3V512 `json:"hash,omitempty"`
 }
 
-type ApplicationID string
-
 type Application struct {
-	ID               ApplicationID `json:"id"`
-	OrganizationSlug string        `json:"organizationSlug,omitempty"`
-	ApplicationSlug  string        `json:"applicationSlug,omitempty"`
-	Sandbox          Sandbox       `json:"sandbox"`
-	Backup           Backup        `json:"backup"`
-	Restore          Restore       `json:"restore"`
-	Executable       Executable    `json:"executable"`
-	Build            Build         `json:"build,omitzero"`
-	ReverseProxy     ReverseProxy  `json:"reverseProxy,omitzero"`
+	AppID        string       `json:"id"`
+	InstID       string       `json:"instanceId"`
+	Sandbox      Sandbox      `json:"sandbox"`
+	Backup       Backup       `json:"backup"`
+	Restore      Restore      `json:"restore"`
+	Executable   Executable   `json:"executable"`
+	Build        Build        `json:"build,omitzero"`
+	ReverseProxy ReverseProxy `json:"reverseProxy,omitzero"`
 }
 
 type ReverseProxy struct {
@@ -203,7 +200,6 @@ type InstallSection struct {
 }
 
 type UnitSection struct {
-	Name        Name   `json:"name"`
 	Description string `json:"description,omitempty"`
 	// e.g. "network-online.target"
 	After Name `json:"after,omitempty"`

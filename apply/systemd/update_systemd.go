@@ -258,7 +258,7 @@ func updateSystemd(logger *slog.Logger, settings setup.Settings, cfg configurati
 
 	// finally, check if changed
 
-	fakeService := NewService(string(cfg.Sandbox.Unit.Unit.Name))
+	fakeService := NewService(cfg.InstID)
 	currentHash, err := linux.Sha3(fakeService.UnitFilename)
 	if err != nil {
 		return false, fmt.Errorf("failed to calculate current hash: %w", err)
