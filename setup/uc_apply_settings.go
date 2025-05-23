@@ -19,19 +19,17 @@ const (
 )
 
 func NewApplySettings() ApplySettings {
-	return func(settings Settings) linux.Result {
+	return func(settings Settings) error {
 
 		buf, err := json.MarshalIndent(settings, "", "  ")
 		if err != nil {
-			return linux.Result{Error: fmt.Errorf("failed marshalling settings: %w", err)}
+			return fmt.Errorf("could not marshal settings: %w", err)
 		}
 
-		return linux.ApplyFile(linux.File{
-			Filename: cfgJson,
-			Data:     buf,
-			// security note: 0600 means that only the owner can read or write the file
-			Mode: 0600,
-		})
+		if err := linux.WriteFile(cfgJson, buf, 0600); err != nil {
+			return fmt.Errorf("could not write settings: %w", err)
+		}
 
+		return nil
 	}
 }

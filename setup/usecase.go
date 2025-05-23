@@ -9,7 +9,6 @@ package setup
 
 import (
 	"fmt"
-	"github.com/worldiety/nago-runner/pkg/linux"
 	"log/slog"
 	"net/url"
 	"strconv"
@@ -94,7 +93,7 @@ func (e Endpoints) Http(path string) string {
 	return sb.String()
 }
 
-type ApplySettings func(Settings) linux.Result
+type ApplySettings func(Settings) error
 
 type LoadSettings func() (Settings, error)
 

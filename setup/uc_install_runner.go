@@ -27,7 +27,7 @@ func NewInstallRunner() InstallRunner {
 			return fmt.Errorf("apt update failed: %w", err)
 		}
 
-		if err := linux.AptInstall("golang", "git", "debootstrap"); err != nil {
+		if err := linux.AptInstall("golang", "git"); err != nil {
 			return fmt.Errorf("apt install failed: %w", err)
 		}
 
