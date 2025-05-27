@@ -32,11 +32,14 @@ type Deployment struct {
 
 type CollectLogs func(request event.JournalCtlLogRequest) ([]event.JournalCtlEntry, error)
 
+type DeleteInstanceData func(req event.DeleteInstanceDataRequested) error
+
 type UseCases struct {
 	Hello              Hello
 	Statistics         Statistics
 	ScheduleStatistics SchedulerStatistics
 	CollectLogs        CollectLogs
+	DeleteInstanceData DeleteInstanceData
 }
 
 func NewUseCases(bus event.Bus) UseCases {
@@ -48,6 +51,7 @@ func NewUseCases(bus event.Bus) UseCases {
 		Statistics:         statisticsFn,
 		ScheduleStatistics: NewSchedulerStatistics(bus, statisticsFn),
 		CollectLogs:        NewCollectLogs(),
+		DeleteInstanceData: NewDeleteInstanceData(),
 	}
 
 	bus.Subscribe(func(evt event.Event) {
@@ -65,6 +69,11 @@ func NewUseCases(bus event.Bus) UseCases {
 				RequestID: evt.RequestID,
 				Entries:   entries,
 			})
+
+		case event.DeleteInstanceDataRequested:
+			if err := uc.DeleteInstanceData(evt); err != nil {
+				slog.Error("Error deleting instance data", "err", err.Error())
+			}
 		}
 	})
 

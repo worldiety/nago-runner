@@ -109,3 +109,10 @@ type JournalCtlLogRequest struct {
 }
 
 func (e JournalCtlLogRequest) isEvent() {}
+
+type DeleteInstanceDataRequested struct {
+	RequestID int64  `json:"rid"`
+	Unit      string `json:"unit"`
+}
+
+func (e DeleteInstanceDataRequested) isEvent() {}

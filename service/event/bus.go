@@ -16,6 +16,7 @@ var (
 	_ = enum.Variant[Event, RunnerConfigurationChanged]()
 	_ = enum.Variant[Event, JournalCtlLogRequest]()
 	_ = enum.Variant[Event, JournalCtlLogResponse]()
+	_ = enum.Variant[Event, DeleteInstanceDataRequested]()
 )
 
 type Bus interface {
