@@ -62,3 +62,50 @@ type RunnerConfigurationChanged struct {
 }
 
 func (e RunnerConfigurationChanged) isEvent() {}
+
+type JournalCtlEntry struct {
+	RealtimeTimestamp   string `json:"__REALTIME_TIMESTAMP,omitempty"`
+	StreamID            string `json:"_STREAM_ID,omitempty"`
+	UID                 string `json:"_UID,omitempty"`
+	SyslogFacility      string `json:"SYSLOG_FACILITY,omitempty"`
+	Transport           string `json:"_TRANSPORT,omitempty"`
+	Priority            string `json:"PRIORITY,omitempty"`
+	PID                 string `json:"_PID,omitempty"`
+	SystemdCgroup       string `json:"_SYSTEMD_CGROUP,omitempty"`
+	SyslogIdentifier    string `json:"SYSLOG_IDENTIFIER,omitempty"`
+	MonotonicTimestamp  string `json:"__MONOTONIC_TIMESTAMP,omitempty"`
+	Cursor              string `json:"__CURSOR,omitempty"`
+	SystemdInvocationID string `json:"_SYSTEMD_INVOCATION_ID,omitempty"`
+	Exe                 string `json:"_EXE,omitempty"`
+	Cmdline             string `json:"_CMDLINE,omitempty"`
+	SystemdUnit         string `json:"_SYSTEMD_UNIT,omitempty"`
+	BootID              string `json:"_BOOT_ID,omitempty"`
+	SystemdSlice        string `json:"_SYSTEMD_SLICE,omitempty"`
+	Comm                string `json:"_COMM,omitempty"`
+	MachineID           string `json:"_MACHINE_ID,omitempty"`
+	GID                 string `json:"_GID,omitempty"`
+	CapEffective        string `json:"_CAP_EFFECTIVE,omitempty"`
+	RuntimeScope        string `json:"_RUNTIME_SCOPE,omitempty"`
+	SeqnumID            string `json:"__SEQNUM_ID,omitempty"`
+	SELinuxContext      string `json:"_SELINUX_CONTEXT,omitempty"`
+	Host                string `json:"_HOSTNAME,omitempty"`
+	Seqnum              string `json:"__SEQNUM,omitempty"`
+	Message             string `json:"MESSAGE,omitempty"`
+}
+
+type JournalCtlLogResponse struct {
+	RequestID int64             `json:"rid"`
+	Entries   []JournalCtlEntry `json:"entries"`
+}
+
+func (e JournalCtlLogResponse) isEvent() {}
+
+type JournalCtlLogRequest struct {
+	RequestID int64  `json:"rid"`
+	Unit      string `json:"unit"`
+	LastN     int    `json:"lastN"`
+	Since     string `json:"since"`
+	Until     string `json:"until"`
+}
+
+func (e JournalCtlLogRequest) isEvent() {}
