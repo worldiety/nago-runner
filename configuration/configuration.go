@@ -629,6 +629,14 @@ type ServiceSection struct {
 	// shutting down a unit (see above), and is usually followed by SIGKILL (see above and below).
 	// For a list of valid signals, see signal(7). Defaults to SIGTERM.
 	KillSignal KillSignal `json:"killSignal,omitempty"`
+
+	// This option serves two purposes. First, it configures the time to wait for each ExecStop= command. If any of
+	// them times out, subsequent ExecStop= commands are skipped and the service will be terminated by SIGTERM.
+	// If no ExecStop= commands are specified, the service gets the SIGTERM immediately. This default behavior can
+	// be changed by the TimeoutStopFailureMode= option. Second, it configures the time to wait for the service itself
+	// to stop. If it doesn't terminate in the specified time, it will be forcibly terminated by SIGKILL
+	// (see KillMode= in systemd.kill(5)).
+	TimeoutStopSec time.Duration `json:"timeoutStopSec,omitempty"`
 }
 
 // KillSignal is one of the standard signals like SIGKILL, SIGTERM etc

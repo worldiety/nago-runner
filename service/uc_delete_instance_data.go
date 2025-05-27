@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 func NewDeleteInstanceData() DeleteInstanceData {
@@ -21,6 +22,9 @@ func NewDeleteInstanceData() DeleteInstanceData {
 		if err := run.Command("systemctl", "stop", req.Unit); err != nil {
 			slog.Warn("failed to stop service, ignoring", "service", req.Unit)
 		}
+
+		slog.Info("awaiting service shutdown")
+		time.Sleep(time.Second * 15)
 
 		// TODO we don't have access to the actual systemd configuration here, we blindly delete by convention
 		path := filepath.Join("/var/lib/ngr", req.Unit)

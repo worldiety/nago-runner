@@ -249,6 +249,10 @@ func updateSystemd(logger *slog.Logger, settings setup.Settings, cfg configurati
 		f.WriteString(fmt.Sprintf("KillSignal=%s\n", service.KillSignal))
 	}
 
+	if service.TimeoutStopSec != 0 {
+		f.WriteString(fmt.Sprintf("TimeoutStopSec=%s\n", service.TimeoutStopSec.String()))
+	}
+
 	// ###
 	install := cfg.Sandbox.Unit.Install
 	f.WriteString("[Install]\n")
