@@ -34,12 +34,23 @@ type CollectLogs func(request event.JournalCtlLogRequest) ([]event.JournalCtlEnt
 
 type DeleteInstanceData func(req event.DeleteInstanceDataRequested) error
 
+type WriteFile func(req event.WriteFileRequested) error
+type DeleteFile func(req event.DeleteFileRequested) error
+type ReadFile func(req event.ReadFileRequested) (event.ReadFileResponse, error)
+type ReadDir func(req event.ReadDirRequested) (event.ReadDirResponse, error)
+type Exec func(req event.ExecRequest) (event.ExecResponse, error)
+
 type UseCases struct {
 	Hello              Hello
 	Statistics         Statistics
 	ScheduleStatistics SchedulerStatistics
 	CollectLogs        CollectLogs
 	DeleteInstanceData DeleteInstanceData
+	WriteFile          WriteFile
+	DeleteFile         DeleteFile
+	ReadFile           ReadFile
+	ReadDir            ReadDir
+	Exec               Exec
 }
 
 func NewUseCases(bus event.Bus) UseCases {
@@ -52,6 +63,11 @@ func NewUseCases(bus event.Bus) UseCases {
 		ScheduleStatistics: NewSchedulerStatistics(bus, statisticsFn),
 		CollectLogs:        NewCollectLogs(),
 		DeleteInstanceData: NewDeleteInstanceData(),
+		DeleteFile:         NewDeleteFile(),
+		ReadFile:           NewReadFile(),
+		ReadDir:            NewReadDir(),
+		WriteFile:          NewWriteFile(),
+		Exec:               NewExec(),
 	}
 
 	bus.Subscribe(func(evt event.Event) {
@@ -74,7 +90,58 @@ func NewUseCases(bus event.Bus) UseCases {
 			if err := uc.DeleteInstanceData(evt); err != nil {
 				slog.Error("Error deleting instance data", "err", err.Error())
 			}
+
+		case event.WriteFileRequested:
+			if err := uc.WriteFile(evt); err != nil {
+				slog.Error("Error writing file", "err", err.Error())
+				bus.Publish(event.Response{
+					RequestID: evt.RequestID,
+					Error:     err.Error(),
+				})
+				return
+			}
+
+			bus.Publish(event.Response{
+				RequestID: evt.RequestID,
+			})
+		case event.DeleteFileRequested:
+			if err := uc.DeleteFile(evt); err != nil {
+				slog.Error("Error deleting file", "err", err.Error())
+				bus.Publish(event.Response{
+					RequestID: evt.RequestID,
+					Error:     err.Error(),
+				})
+				return
+			}
+
+			bus.Publish(event.Response{
+				RequestID: evt.RequestID,
+			})
+		case event.ReadFileRequested:
+			resp, err := uc.ReadFile(evt)
+			if err != nil {
+				slog.Error("Error reading file", "err", err.Error())
+				return
+			}
+			bus.Publish(resp)
+
+		case event.ReadDirRequested:
+			resp, err := uc.ReadDir(evt)
+			if err != nil {
+				slog.Error("Error reading dir", "err", err.Error())
+			}
+
+			bus.Publish(resp)
+		case event.ExecRequest:
+			resp, err := uc.Exec(evt)
+			if err != nil {
+				slog.Error("Error exec", "err", err.Error())
+			}
+
+			// always respond
+			bus.Publish(resp)
 		}
+
 	})
 
 	return uc

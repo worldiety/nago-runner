@@ -37,6 +37,10 @@ func NewWebsocketBus(url string, token string) *WebsocketBus {
 }
 
 func (b *WebsocketBus) Publish(obj event.Event) {
+	// concurrent writes to websocket are not allowed
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
+
 	buf, err := json.MarshalFor[event.Event](obj)
 	if err != nil {
 		slog.Error("failed to marshal websocket json message", "err", err.Error())

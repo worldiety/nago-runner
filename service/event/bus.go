@@ -17,6 +17,15 @@ var (
 	_ = enum.Variant[Event, JournalCtlLogRequest]()
 	_ = enum.Variant[Event, JournalCtlLogResponse]()
 	_ = enum.Variant[Event, DeleteInstanceDataRequested]()
+	_ = enum.Variant[Event, WriteFileRequested]()
+	_ = enum.Variant[Event, DeleteFileRequested]()
+	_ = enum.Variant[Event, ReadFileRequested]()
+	_ = enum.Variant[Event, ReadFileResponse]()
+	_ = enum.Variant[Event, ReadDirRequested]()
+	_ = enum.Variant[Event, ReadDirResponse]()
+	_ = enum.Variant[Event, ExecRequest]()
+	_ = enum.Variant[Event, ExecResponse]()
+	_ = enum.Variant[Event, Response]()
 )
 
 type Bus interface {

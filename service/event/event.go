@@ -7,6 +7,11 @@
 
 package event
 
+import (
+	"os"
+	"time"
+)
+
 type RunnerLaunched struct {
 	Hostname string `json:"hostname"`
 }
@@ -116,3 +121,86 @@ type DeleteInstanceDataRequested struct {
 }
 
 func (e DeleteInstanceDataRequested) isEvent() {}
+
+type WriteFileRequested struct {
+	RequestID int64       `json:"rid"`
+	Path      string      `json:"path"`
+	Mode      os.FileMode `json:"mode"`
+	Content   []byte      `json:"content"`
+}
+
+func (e WriteFileRequested) isEvent() {}
+
+type DeleteFileRequested struct {
+	RequestID int64  `json:"rid"`
+	Path      string `json:"path"`
+}
+
+func (e DeleteFileRequested) isEvent() {}
+
+type Response struct {
+	RequestID int64  `json:"rid"`
+	Error     string `json:"err"`
+}
+
+func (e Response) isEvent() {}
+
+type ReadFileRequested struct {
+	RequestID int64  `json:"rid"`
+	Path      string `json:"path"`
+	MaxSize   int64  `json:"maxSize"` // defaults to 1MiB
+}
+
+func (e ReadFileRequested) isEvent() {}
+
+type ReadFileResponse struct {
+	RequestID int64  `json:"rid"`
+	Path      string `json:"path"`
+	File      File   `json:"file"`
+	Content   []byte `json:"content"`
+}
+
+func (e ReadFileResponse) isEvent() {}
+
+type ReadDirRequested struct {
+	RequestID int64  `json:"rid"`
+	Path      string `json:"path"`
+}
+
+func (e ReadDirRequested) isEvent() {}
+
+type File struct {
+	Name    string      `json:"name"`
+	Mode    os.FileMode `json:"mode"`
+	ModTime time.Time   `json:"modTime"`
+	Size    int64       `json:"size"`
+}
+type ReadDirResponse struct {
+	RequestID int64  `json:"rid"`
+	Path      string `json:"path"`
+	Files     []File
+}
+
+func (e ReadDirResponse) isEvent() {}
+
+type ExecRequest struct {
+	RequestID     int64    `json:"rid"`
+	Cmd           string   `json:"cmd"`
+	Args          []string `json:"args"`
+	CollectStdOut bool     `json:"collectStdOut"`
+	CollectErrOut bool     `json:"collectErrOut"`
+}
+
+func (e ExecRequest) isEvent() {}
+
+type ExecResponse struct {
+	RequestID int64    `json:"rid"`
+	Cmd       string   `json:"cmd"`
+	Args      []string `json:"args"`
+	StdOut    []byte   `json:"stdOut"`
+	ErrOut    []byte   `json:"errOut"`
+	ExitCode  int      `json:"exitCode"`
+	Error     string   `json:"error"`
+}
+
+func (e ExecResponse) isEvent() {}
