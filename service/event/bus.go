@@ -26,6 +26,7 @@ var (
 	_ = enum.Variant[Event, ExecRequest]()
 	_ = enum.Variant[Event, ExecResponse]()
 	_ = enum.Variant[Event, Response]()
+	_ = enum.Variant[Event, BackupRequest]()
 )
 
 type Bus interface {

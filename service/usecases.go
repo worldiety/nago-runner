@@ -10,6 +10,7 @@ package service
 import (
 	"context"
 	"github.com/worldiety/nago-runner/service/event"
+	"github.com/worldiety/nago-runner/setup"
 	"log/slog"
 )
 
@@ -40,6 +41,8 @@ type ReadFile func(req event.ReadFileRequested) (event.ReadFileResponse, error)
 type ReadDir func(req event.ReadDirRequested) (event.ReadDirResponse, error)
 type Exec func(req event.ExecRequest) (event.ExecResponse, error)
 
+type DoBackup func(req event.BackupRequest) error
+
 type UseCases struct {
 	Hello              Hello
 	Statistics         Statistics
@@ -51,10 +54,10 @@ type UseCases struct {
 	ReadFile           ReadFile
 	ReadDir            ReadDir
 	Exec               Exec
+	DoBackup           DoBackup
 }
 
-func NewUseCases(bus event.Bus) UseCases {
-
+func NewUseCases(bus event.Bus, settings setup.Settings) UseCases {
 	statisticsFn := NewStatistics()
 
 	uc := UseCases{
@@ -68,6 +71,7 @@ func NewUseCases(bus event.Bus) UseCases {
 		ReadDir:            NewReadDir(),
 		WriteFile:          NewWriteFile(),
 		Exec:               NewExec(),
+		DoBackup:           NewDoBackup(settings),
 	}
 
 	bus.Subscribe(func(evt event.Event) {
@@ -140,6 +144,18 @@ func NewUseCases(bus event.Bus) UseCases {
 
 			// always respond
 			bus.Publish(resp)
+
+		case event.BackupRequest:
+			go func() {
+				err := uc.DoBackup(evt)
+
+				if err != nil {
+					slog.Error("Error performing async backup", "err", err.Error())
+				}
+			}()
+
+			bus.Publish(event.Response{RequestID: evt.RequestID})
+
 		}
 
 	})

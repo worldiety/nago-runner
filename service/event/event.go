@@ -204,3 +204,14 @@ type ExecResponse struct {
 }
 
 func (e ExecResponse) isEvent() {}
+
+type BackupRequest struct {
+	RequestID  int64  `json:"rid"`
+	InstanceID string `json:"instanceID"`
+}
+
+func (e BackupRequest) isEvent() {}
+
+func (e BackupRequest) ReqID() int64 {
+	return e.RequestID
+}

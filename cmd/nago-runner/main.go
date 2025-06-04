@@ -72,7 +72,7 @@ func realMain() error {
 }
 
 func launch(ctx context.Context, bus *gorilla.WebsocketBus, settings setup.Settings) {
-	ucService := service.NewUseCases(bus)
+	ucService := service.NewUseCases(bus, settings)
 	ucService.ScheduleStatistics(ctx)
 
 	bus.Subscribe(func(obj event.Event) {
