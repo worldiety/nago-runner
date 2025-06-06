@@ -31,6 +31,10 @@ func NewLoadSettings() LoadSettings {
 			cfgJsonPath = cfgJson
 		}
 
+		if _, err := os.Stat(cfgJsonPath); os.IsNotExist(err) {
+			return Settings{}, nil
+		}
+
 		var cfg Settings
 		buf, err := os.ReadFile(cfgJsonPath)
 		if err != nil {
