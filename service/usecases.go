@@ -42,6 +42,7 @@ type ReadDir func(req event.ReadDirRequested) (event.ReadDirResponse, error)
 type Exec func(req event.ExecRequest) (event.ExecResponse, error)
 
 type DoBackup func(req event.BackupRequest) error
+type DoRestore func(req event.RestoreRequest) error
 
 type UseCases struct {
 	Hello              Hello
@@ -55,6 +56,7 @@ type UseCases struct {
 	ReadDir            ReadDir
 	Exec               Exec
 	DoBackup           DoBackup
+	DoRestore          DoRestore
 }
 
 func NewUseCases(bus event.Bus, settings setup.Settings) UseCases {
@@ -71,7 +73,8 @@ func NewUseCases(bus event.Bus, settings setup.Settings) UseCases {
 		ReadDir:            NewReadDir(),
 		WriteFile:          NewWriteFile(),
 		Exec:               NewExec(),
-		DoBackup:           NewDoBackup(settings),
+		DoBackup:           NewDoBackup(settings, bus),
+		DoRestore:          NewDoRestore(settings, bus),
 	}
 
 	bus.Subscribe(func(evt event.Event) {
@@ -156,6 +159,16 @@ func NewUseCases(bus event.Bus, settings setup.Settings) UseCases {
 
 			bus.Publish(event.Response{RequestID: evt.RequestID})
 
+		case event.RestoreRequest:
+			go func() {
+				err := uc.DoRestore(evt)
+
+				if err != nil {
+					slog.Error("Error performing async restore", "err", err.Error())
+				}
+			}()
+
+			bus.Publish(event.Response{RequestID: evt.RequestID})
 		}
 
 	})

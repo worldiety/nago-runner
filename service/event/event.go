@@ -174,6 +174,8 @@ type File struct {
 	Mode    os.FileMode `json:"mode"`
 	ModTime time.Time   `json:"modTime"`
 	Size    int64       `json:"size"`
+	// optional
+	Sha3v512 string `json:"sha512"`
 }
 type ReadDirResponse struct {
 	RequestID int64  `json:"rid"`
@@ -207,6 +209,7 @@ func (e ExecResponse) isEvent() {}
 
 type BackupRequest struct {
 	RequestID  int64  `json:"rid"`
+	ProgressID string `json:"progressId"`
 	InstanceID string `json:"instanceID"`
 }
 
@@ -214,4 +217,31 @@ func (e BackupRequest) isEvent() {}
 
 func (e BackupRequest) ReqID() int64 {
 	return e.RequestID
+}
+
+type RestoreRequest struct {
+	RequestID  int64  `json:"rid"`
+	InstanceID string `json:"instanceID"`
+	ProgressID string `json:"progressId"`
+	Exec       File   `json:"exec"`
+	Data       []File `json:"data"`
+}
+
+func (e RestoreRequest) isEvent() {}
+
+func (e RestoreRequest) ReqID() int64 {
+	return e.RequestID
+}
+
+type ProgressUpdated struct {
+	ProgressID string `json:"progressId"`
+	Percent    int    `json:"percent"`
+	Finished   bool   `json:"done,omitempty"`
+	Error      string `json:"error,omitempty"`
+}
+
+func (e ProgressUpdated) isEvent() {}
+
+func (e ProgressUpdated) ReqID() int64 {
+	return 0
 }

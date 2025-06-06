@@ -32,19 +32,8 @@ func NewDeleteInstanceData() DeleteInstanceData {
 
 		slog.Warn("trying to delete service data dir by convention", "path", path)
 
-		if resolved, err := resolveLink(path); err == nil {
-			slog.Info("resolved data sym link", "path", path, "resolved", resolved)
-			if err := os.RemoveAll(resolved); err != nil {
-				slog.Error("failed to delete service data dir", "resolved", resolved)
-			} else {
-				slog.Info("service data dir deleted", "resolved", resolved)
-			}
-		}
-
-		if err := os.RemoveAll(path); err != nil {
-			slog.Error("failed to delete service data dir", "path", path)
-		} else {
-			slog.Info("service data dir deleted", "path", path)
+		if err := DeleteDir(path); err != nil {
+			return err
 		}
 
 		if err := run.Command("systemctl", "start", req.Unit); err != nil {
@@ -53,6 +42,25 @@ func NewDeleteInstanceData() DeleteInstanceData {
 
 		return nil
 	}
+}
+
+func DeleteDir(path string) error {
+	if resolved, err := resolveLink(path); err == nil {
+		slog.Info("resolved data sym link", "path", path, "resolved", resolved)
+		if err := os.RemoveAll(resolved); err != nil {
+			slog.Error("failed to delete service data dir", "resolved", resolved)
+		} else {
+			slog.Info("service data dir deleted", "resolved", resolved)
+		}
+	}
+
+	if err := os.RemoveAll(path); err != nil {
+		slog.Error("failed to delete service data dir", "path", path)
+	} else {
+		slog.Info("service data dir deleted", "path", path)
+	}
+
+	return nil
 }
 
 func resolveLink(symLink string) (string, error) {
