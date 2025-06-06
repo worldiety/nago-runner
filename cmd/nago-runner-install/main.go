@@ -49,7 +49,7 @@ func realMain() error {
 	}
 
 	if changed {
-		if err := ucSetup.ApplySettings(loadedCfg); err != nil {
+		if err := ucSetup.ApplySettings(cfg); err != nil {
 			return fmt.Errorf("could not apply settings: %w", err)
 		}
 	}
