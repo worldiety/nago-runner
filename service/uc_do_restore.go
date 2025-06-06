@@ -39,6 +39,11 @@ func NewDoRestore(settings setup.Settings, bus event.Bus) DoRestore {
 		slog.Warn("trying to delete service data dir by convention", "path", path)
 
 		if err := DeleteDir(path); err != nil {
+			err = fmt.Errorf("failed to delete dir: %w", err)
+			bus.Publish(event.ProgressUpdated{
+				ProgressID: req.ProgressID,
+				Error:      err.Error(),
+			})
 			return err
 		}
 
@@ -46,7 +51,13 @@ func NewDoRestore(settings setup.Settings, bus event.Bus) DoRestore {
 		filesProgress := 0
 		if req.Exec.Sha3v512 != "" {
 			if err := bc.DownloadIntoFile(execPrefix, req.Exec); err != nil {
-				return fmt.Errorf("exec restore download failed: %w", err)
+				err = fmt.Errorf("exec restore download failed: %w", err)
+				bus.Publish(event.ProgressUpdated{
+					ProgressID: req.ProgressID,
+					Error:      err.Error(),
+				})
+
+				return err
 			}
 
 			slog.Info("restored exec binary", "file", req.Exec.Name)

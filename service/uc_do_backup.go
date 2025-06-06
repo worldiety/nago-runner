@@ -93,6 +93,11 @@ func NewDoBackup(settings setup.Settings, bus event.Bus) DoBackup {
 		}
 
 		if len(errs) > 0 {
+			bus.Publish(event.ProgressUpdated{
+				ProgressID: req.ProgressID,
+				Error:      errs[0].Error(),
+			})
+
 			return fmt.Errorf("errors (%d) occured during backup: %w", len(errs), errs[0])
 		}
 
