@@ -64,6 +64,10 @@ func updateSystemd(logger *slog.Logger, settings setup.Settings, cfg configurati
 		f.WriteString(fmt.Sprintf("BindReadOnlyPaths=%s\n", service.BindReadOnlyPaths))
 	}
 
+	if service.ReadOnlyPaths != "" {
+		f.WriteString(fmt.Sprintf("ReadOnlyPaths=%s\n", service.ReadOnlyPaths))
+	}
+
 	if service.InaccessiblePaths != "" {
 		f.WriteString(fmt.Sprintf("InaccessiblePaths=%s\n", service.InaccessiblePaths))
 	}
