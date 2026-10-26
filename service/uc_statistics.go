@@ -13,15 +13,55 @@ import (
 	"log/slog"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 )
 
+// aptCheckInterval limits the expensive apt simulation.
+const aptCheckInterval = 30 * time.Minute
+
 func NewStatistics() Statistics {
+	var apt struct {
+		mutex     sync.Mutex
+		checkedAt time.Time
+		count     int
+		reboot    bool
+	}
+
+	hostStats := func() event.HostStats {
+		var h event.HostStats
+		h.CPUPercent, _ = linux.CPUBusy(200 * time.Millisecond)
+		h.Load1, h.Load5, h.Load15, _ = linux.LoadAvg()
+		h.MemAvailable, _ = linux.MemoryAvailable()
+		h.DiskTotal, h.DiskFree, _ = linux.DiskUsage(dataPrefix)
+		h.UptimeSeconds, _ = linux.Uptime()
+		h.Kernel = linux.Kernel()
+
+		apt.mutex.Lock()
+		defer apt.mutex.Unlock()
+		if time.Since(apt.checkedAt) > aptCheckInterval {
+			count, err := linux.AptUpgradable()
+			if err != nil {
+				slog.Warn("cannot check apt upgrades", "err", err.Error())
+			} else {
+				apt.count = count
+			}
+			apt.reboot = linux.RebootRequired()
+			apt.checkedAt = time.Now()
+		}
+
+		h.AptUpgradable = apt.count
+		h.AptCheckedAt = apt.checkedAt
+		h.RebootRequired = apt.reboot
+		return h
+	}
+
 	return func() event.StatisticsUpdated {
 		var res event.StatisticsUpdated
 
 		memTotal, _ := linux.MemoryTotal()
 		res.MemTotal = memTotal
+		res.Host = hostStats()
 
 		entries, err := os.ReadDir("/proc")
 		if err != nil {

@@ -41,6 +41,24 @@ type StatisticsUpdated struct {
 	MemTotal    int64        `json:"memTotal,omitempty"`
 	Processes   []Process    `json:"processes,omitempty"`
 	Deployments []Deployment `json:"deployments,omitempty"`
+	Host        HostStats    `json:"host,omitzero"`
+}
+
+// HostStats describes the machine as a whole. AptUpgradable and RebootRequired are refreshed less often than
+// the rest, see AptCheckedAt.
+type HostStats struct {
+	CPUPercent     int       `json:"cpuPercent"`
+	Load1          float64   `json:"load1"`
+	Load5          float64   `json:"load5"`
+	Load15         float64   `json:"load15"`
+	MemAvailable   int64     `json:"memAvailable"`
+	DiskTotal      int64     `json:"diskTotal"`
+	DiskFree       int64     `json:"diskFree"`
+	UptimeSeconds  int64     `json:"uptimeSeconds"`
+	Kernel         string    `json:"kernel"`
+	AptUpgradable  int       `json:"aptUpgradable"`
+	AptCheckedAt   time.Time `json:"aptCheckedAt"`
+	RebootRequired bool      `json:"rebootRequired"`
 }
 
 func (StatisticsUpdated) isEvent() {}
