@@ -83,6 +83,21 @@ func launch(ctx context.Context, bus *gorilla.WebsocketBus, settings setup.Setti
 				return
 			}
 
+			// an empty configuration is far more likely a hub failure than the intention to undeploy
+			// everything. Applying it would remove all reverse proxy rules and services at once.
+			if len(cfg.Applications) == 0 {
+				n, err := systemd.CountManagedServices(slog.Default())
+				if err != nil {
+					slog.Error("cannot count managed services, refusing to apply an empty configuration", "err", err.Error())
+					return
+				}
+
+				if n > 0 {
+					slog.Error("refusing to apply an empty configuration while managed services exist, remove them manually if intended", "count", n)
+					return
+				}
+			}
+
 			if err := caddy.Apply(slog.Default(), settings, cfg); err != nil {
 				slog.Error("cannot apply caddy configuration", "err", err.Error())
 			}

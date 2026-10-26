@@ -8,6 +8,8 @@
 package service
 
 import (
+	"fmt"
+	"github.com/worldiety/nago-runner/configuration"
 	"github.com/worldiety/nago-runner/pkg/run"
 	"github.com/worldiety/nago-runner/service/event"
 	"log/slog"
@@ -19,6 +21,10 @@ import (
 
 func NewDeleteInstanceData() DeleteInstanceData {
 	return func(req event.DeleteInstanceDataRequested) error {
+		// security note: an empty or malformed unit would resolve to /var/lib/ngr or escape it
+		if !configuration.Name(req.Unit).Valid() {
+			return fmt.Errorf("invalid unit name: %q", req.Unit)
+		}
 
 		if err := run.Command("systemctl", "stop", req.Unit); err != nil {
 			slog.Warn("failed to stop service, ignoring", "service", req.Unit)

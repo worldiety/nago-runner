@@ -9,6 +9,8 @@ package service
 
 import (
 	"fmt"
+	"github.com/worldiety/nago-runner/configuration"
+	"github.com/worldiety/nago-runner/pkg/datadir"
 	"github.com/worldiety/nago-runner/pkg/run"
 	"github.com/worldiety/nago-runner/service/event"
 	"github.com/worldiety/nago-runner/setup"
@@ -24,6 +26,15 @@ func NewDoRestore(settings setup.Settings, bus event.Bus) DoRestore {
 			Timeout: time.Minute * 5,
 		}
 
+		if !configuration.Name(req.InstanceID).Valid() {
+			err := fmt.Errorf("invalid instance id: %q", req.InstanceID)
+			bus.Publish(event.ProgressUpdated{
+				ProgressID: req.ProgressID,
+				Error:      err.Error(),
+			})
+			return err
+		}
+
 		slog.Info("starting restore", "instance", req.InstanceID, "req", req.ReqID())
 		bc := NewBackupClient(&client, settings, req.InstanceID)
 
@@ -36,10 +47,11 @@ func NewDoRestore(settings setup.Settings, bus event.Bus) DoRestore {
 
 		path := filepath.Join("/var/lib/ngr", req.InstanceID)
 
-		slog.Warn("trying to delete service data dir by convention", "path", path)
+		// security note: the restore may fail or be partial, thus never delete the current data
+		slog.Warn("moving current service data dir into quarantine by convention", "path", path)
 
-		if err := DeleteDir(path); err != nil {
-			err = fmt.Errorf("failed to delete dir: %w", err)
+		if _, err := datadir.Quarantine(path); err != nil {
+			err = fmt.Errorf("failed to quarantine dir: %w", err)
 			bus.Publish(event.ProgressUpdated{
 				ProgressID: req.ProgressID,
 				Error:      err.Error(),

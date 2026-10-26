@@ -10,11 +10,13 @@ package systemd
 import (
 	"fmt"
 	"github.com/worldiety/nago-runner/configuration"
+	"github.com/worldiety/nago-runner/pkg/datadir"
 	"github.com/worldiety/nago-runner/pkg/run"
 	"github.com/worldiety/nago-runner/setup"
 	"log/slog"
 	"os"
 	"slices"
+	"strings"
 )
 
 const systemdConfDir = "/etc/systemd/system"
@@ -23,6 +25,12 @@ func Apply(logger *slog.Logger, settings setup.Settings, cfg configuration.Runne
 	keepServices, removeServices, err := categorizeServices(logger, cfg)
 	if err != nil {
 		return fmt.Errorf("cannot categorize services: %w", err)
+	}
+
+	if refusePurge(cfg, removeServices) {
+		// an empty configuration is far more likely a hub failure than the intention to undeploy everything
+		logger.Error("refusing to remove all managed services due to an empty configuration, remove them manually if intended", "count", len(removeServices))
+		removeServices = nil
 	}
 
 	if err := purgeServices(logger, removeServices); err != nil {
@@ -82,9 +90,7 @@ func categorizeServices(logger *slog.Logger, cfg configuration.Runner) (keep []S
 			continue
 		}
 
-		stillAvailable := slices.ContainsFunc(cfg.Applications, func(app configuration.Application) bool {
-			return app.InstID == service.Name()
-		})
+		stillAvailable := isDeclared(cfg, service)
 
 		if stillAvailable {
 			keep = append(keep, service)
@@ -115,9 +121,11 @@ func purgeServices(logger *slog.Logger, toRemove []Service) error {
 			return fmt.Errorf("failed to remove executable: %s: %w", paths.ExecFilename, err)
 		}
 
-		logger.Info("removing data", "file", paths.DataDirectory)
-		if err := os.RemoveAll(paths.DataDirectory); err != nil {
-			return fmt.Errorf("failed to remove data dir: %s: %w", paths.DataDirectory, err)
+		// security note: never delete the data of an undeclared service, a wrong configuration must not
+		// be able to destroy any data. An operator has to decide what to do with the quarantined data.
+		logger.Info("moving data into quarantine", "file", paths.DataDirectory)
+		if _, err := datadir.Quarantine(paths.DataDirectory); err != nil {
+			return fmt.Errorf("failed to quarantine data dir: %s: %w", paths.DataDirectory, err)
 		}
 
 		logger.Info("removing service", "file", service.UnitFilename)
@@ -136,4 +144,34 @@ func purgeServices(logger *slog.Logger, toRemove []Service) error {
 	}
 
 	return nil
+}
+
+// refusePurge returns true, if the given configuration would remove all managed services at once because it
+// declares no applications at all.
+func refusePurge(cfg configuration.Runner, toRemove []Service) bool {
+	return len(cfg.Applications) == 0 && len(toRemove) > 0
+}
+
+// isDeclared matches case-insensitive, because the service name is derived from the lower-cased unit file name.
+func isDeclared(cfg configuration.Runner, service Service) bool {
+	return slices.ContainsFunc(cfg.Applications, func(app configuration.Application) bool {
+		return strings.EqualFold(app.InstID, service.Name())
+	})
+}
+
+// CountManagedServices returns the amount of services which are managed by this runner.
+func CountManagedServices(logger *slog.Logger) (int, error) {
+	allServices, err := FindServices(logger)
+	if err != nil {
+		return 0, err
+	}
+
+	n := 0
+	for _, service := range allServices {
+		if service.Managed {
+			n++
+		}
+	}
+
+	return n, nil
 }
