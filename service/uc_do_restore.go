@@ -37,6 +37,11 @@ func NewDoRestore(settings setup.Settings, bus event.Bus) DoRestore {
 
 		slog.Info("starting restore", "instance", req.InstanceID, "req", req.ReqID())
 		bc := NewBackupClient(&client, settings, req.InstanceID)
+		if req.BackupInstance != "" {
+			// v2 backups are stored per instance, the blobs may belong to a foreign instance
+			bc.blobURL = NewBackupClientV2(&client, settings, req.InstanceID).BlobURL
+			bc.blobInstance = req.BackupInstance
+		}
 
 		if err := run.Command("systemctl", "stop", req.InstanceID); err != nil {
 			slog.Warn("failed to stop service, ignoring", "service", req.InstanceID)

@@ -222,9 +222,12 @@ func (e BackupRequest) ReqID() int64 {
 type RestoreRequest struct {
 	RequestID  int64  `json:"rid"`
 	InstanceID string `json:"instanceID"`
-	ProgressID string `json:"progressId"`
-	Exec       File   `json:"exec"`
-	Data       []File `json:"data"`
+	// BackupInstance is the instance the blobs belong to (v2 backups). It may differ from InstanceID when
+	// restoring a foreign backup. If empty, the v1 blob endpoints are used.
+	BackupInstance string `json:"backupInstance,omitempty"`
+	ProgressID     string `json:"progressId"`
+	Exec           File   `json:"exec"`
+	Data           []File `json:"data"`
 }
 
 func (e RestoreRequest) isEvent() {}

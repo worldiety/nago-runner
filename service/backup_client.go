@@ -28,6 +28,10 @@ type BackupClient struct {
 	client     *http.Client
 	settings   setup.Settings
 	instanceId string
+
+	// blobURL and blobInstance are set for v2 restores, otherwise the v1 endpoint is used
+	blobURL      func(backupInstance string, hash Sha3V512) string
+	blobInstance string
 }
 
 func NewBackupClient(client *http.Client, settings setup.Settings, instanceId string) *BackupClient {
@@ -196,6 +200,9 @@ func (c *BackupClient) DownloadIntoFile(rootPath string, file event.File) error 
 	defer f.Close()
 
 	url := c.settings.Endpoints().Http("api/v1/backup/blob/download?hash=" + string(file.Sha3v512))
+	if c.blobURL != nil {
+		url = c.blobURL(c.blobInstance, Sha3V512(file.Sha3v512))
+	}
 
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
