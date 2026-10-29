@@ -14,6 +14,7 @@ import (
 
 	"github.com/worldiety/nago-runner/configuration"
 	"github.com/worldiety/nago-runner/pkg/linux"
+	"github.com/worldiety/nago-runner/setup"
 )
 
 func executable(t *testing.T, buf []byte) configuration.Executable {
@@ -179,5 +180,23 @@ func TestIsReplacedExecutable(t *testing.T) {
 
 	if isReplacedExecutable("/opt/ngr/abcd (deleted)", "/opt/ngr/abc") {
 		t.Fatal("another executable must not match")
+	}
+}
+
+func TestUpdateExecutableKeepsInstanceWithoutDeclaredExecutable(t *testing.T) {
+	requested := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requested = true
+	}))
+	defer srv.Close()
+
+	cfg := configuration.Application{InstID: "abc", Executable: configuration.Executable{}}
+	changed, err := updateExecutable(slog.Default(), setup.Settings{URL: srv.URL}, cfg)
+	if err == nil || changed {
+		t.Fatalf("expected an error and no change, got changed=%v err=%v", changed, err)
+	}
+
+	if requested {
+		t.Fatal("nothing must be downloaded")
 	}
 }

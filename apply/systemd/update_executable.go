@@ -29,6 +29,12 @@ func updateExecutable(logger *slog.Logger, settings setup.Settings, cfg configur
 		return false, fmt.Errorf("invalid systemd unit name: %s", cfg.InstID)
 	}
 
+	// the hub declares an instance without an executable, if the selected build has none for this platform. The
+	// instance stays declared and thus untouched, the other instances are applied as usual.
+	if cfg.Executable.Hash == "" {
+		return false, fmt.Errorf("the hub declares no executable for this platform, keeping the current state of %s, select a build for this platform", cfg.InstID)
+	}
+
 	fakeService := NewService(cfg.InstID)
 	paths := fakeService.Paths()
 	hash, err := linux.Sha3(paths.ExecFilename)
