@@ -81,7 +81,13 @@ func launch(ctx context.Context, bus *gorilla.WebsocketBus, settings setup.Setti
 	})
 
 	bus.Subscribe(func(obj event.Event) {
-		if _, ok := obj.(event.RunnerConfigurationChanged); ok {
+		switch obj.(type) {
+		case event.RunnerConfigurationChanged:
+			slog.Info("configuration change announced by the hub")
+			applier.Request()
+		case event.ConnectionCreated:
+			// changes announced while the connection was down are lost, thus apply after every (re)connect
+			slog.Info("connected to the hub, applying the current configuration")
 			applier.Request()
 		}
 	})
@@ -94,6 +100,8 @@ func applyConfiguration(settings setup.Settings) {
 		slog.Error("cannot load configuration", "err", err.Error())
 		return
 	}
+
+	slog.Info("applying configuration", "instances", len(cfg.Applications))
 
 	// an empty configuration is far more likely a hub failure than the intention to undeploy
 	// everything. Applying it would remove all reverse proxy rules and services at once.
