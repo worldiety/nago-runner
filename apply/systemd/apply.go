@@ -8,6 +8,7 @@
 package systemd
 
 import (
+	"errors"
 	"fmt"
 	"github.com/worldiety/nago-runner/configuration"
 	"github.com/worldiety/nago-runner/pkg/datadir"
@@ -33,24 +34,40 @@ func Apply(logger *slog.Logger, settings setup.Settings, cfg configuration.Runne
 		removeServices = nil
 	}
 
+	// a failed removal of an undeclared service must not block the updates of the declared ones
+	var errs []error
 	if err := purgeServices(logger, removeServices); err != nil {
-		return fmt.Errorf("cannot purge services: %w", err)
+		logger.Error("cannot purge services, continuing with the declared ones", "err", err.Error())
+		errs = append(errs, fmt.Errorf("cannot purge services: %w", err))
 	}
 
 	for _, service := range keepServices {
 		logger.Info("apply service", "name", service.Name())
 	}
 
+	// one broken instance must neither block the updates of the other instances nor the restarts of the
+	// executables which have already been replaced
 	var requiresRestart []Service
 	for _, app := range cfg.Applications {
 		service, changed, err := createOrUpdateService(logger, settings, app)
 		if err != nil {
-			return fmt.Errorf("cannot create or update service: %w", err)
+			logger.Error("cannot create or update service, continuing with the others", "instance", app.InstID, "err", err.Error())
+			errs = append(errs, fmt.Errorf("cannot create or update service %s: %w", app.InstID, err))
+			continue
 		}
 
 		if !changed {
-			logger.Info("service is unchanged", "service", service.Name())
-			continue
+			stale, err := runsReplacedExecutable(service)
+			if err != nil {
+				logger.Warn("cannot inspect the running executable", "service", service.Name(), "err", err.Error())
+			}
+
+			if !stale {
+				logger.Info("service is unchanged", "service", service.Name())
+				continue
+			}
+
+			logger.Warn("service still runs a replaced executable", "service", service.Name())
 		}
 
 		requiresRestart = append(requiresRestart, service)
@@ -59,7 +76,8 @@ func Apply(logger *slog.Logger, settings setup.Settings, cfg configuration.Runne
 	// this optimizes mass-updates to O(1) systemd reloads
 	if len(requiresRestart) > 0 {
 		if err := run.Command("systemctl", "daemon-reload"); err != nil {
-			return fmt.Errorf("error reloading systemd daemon: %w", err)
+			errs = append(errs, fmt.Errorf("error reloading systemd daemon: %w", err))
+			return errors.Join(errs...)
 		}
 
 		for _, service := range requiresRestart {
@@ -75,7 +93,7 @@ func Apply(logger *slog.Logger, settings setup.Settings, cfg configuration.Runne
 		}
 	}
 
-	return nil
+	return errors.Join(errs...)
 }
 
 func categorizeServices(logger *slog.Logger, cfg configuration.Runner) (keep []Service, remove []Service, err error) {

@@ -75,38 +75,46 @@ func launch(ctx context.Context, bus *gorilla.WebsocketBus, settings setup.Setti
 	ucService := service.NewUseCases(bus, settings)
 	ucService.ScheduleStatistics(ctx)
 
+	// the bus notifies every event on its own goroutine, thus configuration changes must be serialized here
+	applier := apply.NewSerial(ctx, func() {
+		applyConfiguration(settings)
+	})
+
 	bus.Subscribe(func(obj event.Event) {
 		if _, ok := obj.(event.RunnerConfigurationChanged); ok {
-			cfg, err := apply.QueryConfiguration(settings)
-			if err != nil {
-				slog.Error("cannot load configuration", "err", err.Error())
-				return
-			}
-
-			// an empty configuration is far more likely a hub failure than the intention to undeploy
-			// everything. Applying it would remove all reverse proxy rules and services at once.
-			if len(cfg.Applications) == 0 {
-				n, err := systemd.CountManagedServices(slog.Default())
-				if err != nil {
-					slog.Error("cannot count managed services, refusing to apply an empty configuration", "err", err.Error())
-					return
-				}
-
-				if n > 0 {
-					slog.Error("refusing to apply an empty configuration while managed services exist, remove them manually if intended", "count", n)
-					return
-				}
-			}
-
-			if err := caddy.Apply(slog.Default(), settings, cfg); err != nil {
-				slog.Error("cannot apply caddy configuration", "err", err.Error())
-			}
-
-			if err := systemd.Apply(slog.Default(), settings, cfg); err != nil {
-				slog.Error("cannot apply systemd configuration", "err", err.Error())
-			}
-
+			applier.Request()
 		}
 	})
 
+}
+
+func applyConfiguration(settings setup.Settings) {
+	cfg, err := apply.QueryConfiguration(settings)
+	if err != nil {
+		slog.Error("cannot load configuration", "err", err.Error())
+		return
+	}
+
+	// an empty configuration is far more likely a hub failure than the intention to undeploy
+	// everything. Applying it would remove all reverse proxy rules and services at once.
+	if len(cfg.Applications) == 0 {
+		n, err := systemd.CountManagedServices(slog.Default())
+		if err != nil {
+			slog.Error("cannot count managed services, refusing to apply an empty configuration", "err", err.Error())
+			return
+		}
+
+		if n > 0 {
+			slog.Error("refusing to apply an empty configuration while managed services exist, remove them manually if intended", "count", n)
+			return
+		}
+	}
+
+	if err := caddy.Apply(slog.Default(), settings, cfg); err != nil {
+		slog.Error("cannot apply caddy configuration", "err", err.Error())
+	}
+
+	if err := systemd.Apply(slog.Default(), settings, cfg); err != nil {
+		slog.Error("cannot apply systemd configuration", "err", err.Error())
+	}
 }
