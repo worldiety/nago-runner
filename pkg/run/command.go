@@ -15,6 +15,7 @@ import (
 	"log/slog"
 	"os/exec"
 	"strings"
+	"sync"
 )
 
 func Command(command string, args ...string) error {
@@ -34,9 +35,19 @@ func Command(command string, args ...string) error {
 		return err
 	}
 
-	go logOutput(stdoutPipe, slog.LevelInfo)
-	go logOutput(stderrPipe, slog.LevelError)
+	// Wait closes the pipes, thus all output (e.g. the reason of a failed systemctl call) must be read before waiting
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		logOutput(stdoutPipe, slog.LevelInfo)
+	}()
+	go func() {
+		defer wg.Done()
+		logOutput(stderrPipe, slog.LevelError)
+	}()
 
+	wg.Wait()
 	return cmd.Wait()
 }
 

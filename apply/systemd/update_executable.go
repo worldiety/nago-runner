@@ -9,6 +9,7 @@ package systemd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/worldiety/nago-runner/configuration"
 	"github.com/worldiety/nago-runner/pkg/linux"
@@ -22,6 +23,10 @@ import (
 	"time"
 )
 
+// ErrNoExecutable tells that the hub declares an instance without an executable, because the selected build has
+// none for the platform of this runner.
+var ErrNoExecutable = errors.New("the hub declares no executable for this platform")
+
 // updateExecutable inspects the declared executable artifacts and creates or replaces any existing
 // executable with the given version or does nothing if it already matches (returns false and no error).
 func updateExecutable(logger *slog.Logger, settings setup.Settings, cfg configuration.Application) (bool, error) {
@@ -32,7 +37,7 @@ func updateExecutable(logger *slog.Logger, settings setup.Settings, cfg configur
 	// the hub declares an instance without an executable, if the selected build has none for this platform. The
 	// instance stays declared and thus untouched, the other instances are applied as usual.
 	if cfg.Executable.Hash == "" {
-		return false, fmt.Errorf("the hub declares no executable for this platform, keeping the current state of %s, select a build for this platform", cfg.InstID)
+		return false, fmt.Errorf("%w, keeping the current state of %s, select a build for this platform", ErrNoExecutable, cfg.InstID)
 	}
 
 	fakeService := NewService(cfg.InstID)

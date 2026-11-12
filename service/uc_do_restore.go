@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"github.com/worldiety/nago-runner/configuration"
 	"github.com/worldiety/nago-runner/pkg/datadir"
+	"github.com/worldiety/nago-runner/pkg/instlock"
 	"github.com/worldiety/nago-runner/pkg/run"
 	"github.com/worldiety/nago-runner/service/event"
 	"github.com/worldiety/nago-runner/setup"
@@ -34,6 +35,11 @@ func NewDoRestore(settings setup.Settings, bus event.Bus) DoRestore {
 			})
 			return err
 		}
+
+		// the configuration apply must neither restart, update nor remove the instance while it is stopped and its
+		// data is replaced. An apply which currently works on the instance finishes first.
+		instlock.Lock(req.InstanceID)
+		defer instlock.Unlock(req.InstanceID)
 
 		slog.Info("starting restore", "instance", req.InstanceID, "req", req.ReqID())
 		bc := NewBackupClient(&client, settings, req.InstanceID)

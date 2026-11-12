@@ -10,6 +10,7 @@ package service
 import (
 	"fmt"
 	"github.com/worldiety/nago-runner/configuration"
+	"github.com/worldiety/nago-runner/pkg/instlock"
 	"github.com/worldiety/nago-runner/pkg/run"
 	"github.com/worldiety/nago-runner/service/event"
 	"log/slog"
@@ -25,6 +26,10 @@ func NewDeleteInstanceData() DeleteInstanceData {
 		if !configuration.Name(req.Unit).Valid() {
 			return fmt.Errorf("invalid unit name: %q", req.Unit)
 		}
+
+		// the configuration apply must not restart the instance while its data is deleted
+		instlock.Lock(req.Unit)
+		defer instlock.Unlock(req.Unit)
 
 		if err := run.Command("systemctl", "stop", req.Unit); err != nil {
 			slog.Warn("failed to stop service, ignoring", "service", req.Unit)

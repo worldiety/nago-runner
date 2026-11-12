@@ -9,6 +9,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/worldiety/nago-runner/apply"
 	"github.com/worldiety/nago-runner/apply/caddy"
@@ -75,9 +76,12 @@ func launch(ctx context.Context, bus *gorilla.WebsocketBus, settings setup.Setti
 	ucService := service.NewUseCases(bus, settings)
 	ucService.ScheduleStatistics(ctx)
 
-	// the bus notifies every event on its own goroutine, thus configuration changes must be serialized here
-	applier := apply.NewSerial(ctx, func() {
-		applyConfiguration(settings)
+	// the bus notifies every event on its own goroutine, thus configuration changes must be serialized here. A
+	// failed apply is retried, see apply.Serial.
+	caddyApplier := caddy.NewApplier()
+	systemdApplier := systemd.NewApplier()
+	applier := apply.NewSerial(ctx, func() error {
+		return applyConfiguration(settings, caddyApplier, systemdApplier)
 	})
 
 	bus.Subscribe(func(obj event.Event) {
@@ -94,11 +98,13 @@ func launch(ctx context.Context, bus *gorilla.WebsocketBus, settings setup.Setti
 
 }
 
-func applyConfiguration(settings setup.Settings) {
+// applyConfiguration fetches and applies the current configuration. A returned error means that the apply should
+// be retried later.
+func applyConfiguration(settings setup.Settings, caddyApplier *caddy.Applier, systemdApplier *systemd.Applier) error {
 	cfg, err := apply.QueryConfiguration(settings)
 	if err != nil {
 		slog.Error("cannot load configuration", "err", err.Error())
-		return
+		return fmt.Errorf("cannot load configuration: %w", err)
 	}
 
 	slog.Info("applying configuration", "instances", len(cfg.Applications))
@@ -109,20 +115,25 @@ func applyConfiguration(settings setup.Settings) {
 		n, err := systemd.CountManagedServices(slog.Default())
 		if err != nil {
 			slog.Error("cannot count managed services, refusing to apply an empty configuration", "err", err.Error())
-			return
+			return fmt.Errorf("cannot count managed services: %w", err)
 		}
 
 		if n > 0 {
 			slog.Error("refusing to apply an empty configuration while managed services exist, remove them manually if intended", "count", n)
-			return
+			return fmt.Errorf("refusing to apply an empty configuration while %d managed services exist", n)
 		}
 	}
 
-	if err := caddy.Apply(slog.Default(), settings, cfg); err != nil {
+	var errs []error
+	if err := caddyApplier.Apply(slog.Default(), settings, cfg); err != nil {
 		slog.Error("cannot apply caddy configuration", "err", err.Error())
+		errs = append(errs, err)
 	}
 
-	if err := systemd.Apply(slog.Default(), settings, cfg); err != nil {
+	if err := systemdApplier.Apply(slog.Default(), settings, cfg); err != nil {
 		slog.Error("cannot apply systemd configuration", "err", err.Error())
+		errs = append(errs, err)
 	}
+
+	return errors.Join(errs...)
 }

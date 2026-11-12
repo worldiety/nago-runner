@@ -16,7 +16,21 @@ import (
 	"log/slog"
 )
 
-func Apply(logger *slog.Logger, settings setup.Settings, cfg configuration.Runner) error {
+// Applier writes the Caddyfile and reloads caddy. It is not safe for concurrent use, the runner calls it from a
+// single goroutine, see apply.Serial.
+type Applier struct {
+	// reloadPending remembers a failed reload. The Caddyfile is already written, thus a later apply sees no change
+	// and would never reload caddy again.
+	reloadPending bool
+}
+
+func NewApplier() *Applier {
+	return &Applier{}
+}
+
+// Apply writes the Caddyfile and reloads caddy, if required. A returned error means that the apply should be
+// retried later.
+func (a *Applier) Apply(logger *slog.Logger, settings setup.Settings, cfg configuration.Runner) error {
 	if err := installCaddy(logger); err != nil {
 		return fmt.Errorf("cannot install caddy: %w", err)
 	}
@@ -26,14 +40,21 @@ func Apply(logger *slog.Logger, settings setup.Settings, cfg configuration.Runne
 		return fmt.Errorf("cannot update caddyfile: %w", err)
 	}
 
-	if updated {
-		if err := run.Command("systemctl", "reload", "caddy"); err != nil {
-			return fmt.Errorf("error reloading caddy: %w", err)
-		}
-	} else {
+	if !updated && !a.reloadPending {
 		logger.Info("caddy configuration is up to date")
+		return nil
 	}
 
+	if !updated {
+		logger.Warn("retrying the failed reload of caddy")
+	}
+
+	if err := run.Command("systemctl", "reload", "caddy"); err != nil {
+		a.reloadPending = true
+		return fmt.Errorf("error reloading caddy: %w", err)
+	}
+
+	a.reloadPending = false
 	return nil
 }
 

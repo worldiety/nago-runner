@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"github.com/worldiety/nago-runner/configuration"
 	"github.com/worldiety/nago-runner/pkg/datadir"
+	"github.com/worldiety/nago-runner/pkg/instlock"
 	"github.com/worldiety/nago-runner/pkg/run"
 	"github.com/worldiety/nago-runner/setup"
 	"log/slog"
@@ -22,7 +23,26 @@ import (
 
 const systemdConfDir = "/etc/systemd/system"
 
-func Apply(logger *slog.Logger, settings setup.Settings, cfg configuration.Runner) error {
+// Applier applies the declared services. It is not safe for concurrent use, the runner calls it from a single
+// goroutine, see apply.Serial.
+type Applier struct {
+	// pendingEnable and pendingRestart remember the services whose enable or restart has failed. Their unit file
+	// and executable are already up to date, thus a later apply sees no change and nothing else would ever enable
+	// or restart them again.
+	pendingEnable  map[string]bool
+	pendingRestart map[string]bool
+}
+
+func NewApplier() *Applier {
+	return &Applier{
+		pendingEnable:  map[string]bool{},
+		pendingRestart: map[string]bool{},
+	}
+}
+
+// Apply updates, enables and restarts the declared services and removes the undeclared ones. A returned error
+// means that the apply should be retried later.
+func (a *Applier) Apply(logger *slog.Logger, settings setup.Settings, cfg configuration.Runner) error {
 	keepServices, removeServices, err := categorizeServices(logger, cfg)
 	if err != nil {
 		return fmt.Errorf("cannot categorize services: %w", err)
@@ -34,12 +54,43 @@ func Apply(logger *slog.Logger, settings setup.Settings, cfg configuration.Runne
 		removeServices = nil
 	}
 
-	// a failed removal of an undeclared service must not block the updates of the declared ones
 	var errs []error
+
+	// security note: an instance which is being restored is stopped and its data is replaced. It must neither be
+	// removed, updated nor restarted now, a retry applies it after the restore.
+	var locked []string
+	defer func() {
+		for _, id := range locked {
+			instlock.Unlock(id)
+		}
+	}()
+
+	lock := func(id string) bool {
+		if !instlock.TryLock(id) {
+			return false
+		}
+
+		locked = append(locked, id)
+		return true
+	}
+
+	removeServices = slices.DeleteFunc(removeServices, func(service Service) bool {
+		if lock(service.Name()) {
+			return false
+		}
+
+		logger.Warn("service is being restored, removing it later", "service", service.Name())
+		errs = append(errs, fmt.Errorf("service %s is being restored", service.Name()))
+		return true
+	})
+
+	// a failed removal of an undeclared service must not block the updates of the declared ones
 	if err := purgeServices(logger, removeServices); err != nil {
 		logger.Error("cannot purge services, continuing with the declared ones", "err", err.Error())
 		errs = append(errs, fmt.Errorf("cannot purge services: %w", err))
 	}
+
+	a.forgetUndeclared(cfg)
 
 	for _, service := range keepServices {
 		logger.Info("apply service", "name", service.Name())
@@ -47,27 +98,50 @@ func Apply(logger *slog.Logger, settings setup.Settings, cfg configuration.Runne
 
 	// one broken instance must neither block the updates of the other instances nor the restarts of the
 	// executables which have already been replaced
-	var requiresRestart []Service
+	var requiresRestart, requiresEnable []Service
 	for _, app := range cfg.Applications {
+		if !lock(app.InstID) {
+			logger.Warn("instance is being restored, applying it later", "instance", app.InstID)
+			errs = append(errs, fmt.Errorf("instance %s is being restored", app.InstID))
+			continue
+		}
+
 		service, changed, err := createOrUpdateService(logger, settings, app)
 		if err != nil {
+			if errors.Is(err, ErrNoExecutable) {
+				// not retried: only a new configuration can change this and the hub announces it
+				logger.Error("cannot create or update service, continuing with the others", "instance", app.InstID, "err", err.Error())
+				continue
+			}
+
 			logger.Error("cannot create or update service, continuing with the others", "instance", app.InstID, "err", err.Error())
 			errs = append(errs, fmt.Errorf("cannot create or update service %s: %w", app.InstID, err))
 			continue
 		}
 
-		if !changed {
+		name := service.Name()
+		switch {
+		case changed:
+		case a.pendingRestart[name]:
+			logger.Warn("retrying the failed restart of the service", "service", name)
+		default:
 			stale, err := runsReplacedExecutable(service)
 			if err != nil {
-				logger.Warn("cannot inspect the running executable", "service", service.Name(), "err", err.Error())
+				logger.Warn("cannot inspect the running executable", "service", name, "err", err.Error())
 			}
 
 			if !stale {
-				logger.Info("service is unchanged", "service", service.Name())
+				if a.pendingEnable[name] {
+					logger.Warn("retrying the failed enable of the service", "service", name)
+					requiresEnable = append(requiresEnable, service)
+					continue
+				}
+
+				logger.Info("service is unchanged", "service", name)
 				continue
 			}
 
-			logger.Warn("service still runs a replaced executable", "service", service.Name())
+			logger.Warn("service still runs a replaced executable", "service", name)
 		}
 
 		requiresRestart = append(requiresRestart, service)
@@ -76,24 +150,70 @@ func Apply(logger *slog.Logger, settings setup.Settings, cfg configuration.Runne
 	// this optimizes mass-updates to O(1) systemd reloads
 	if len(requiresRestart) > 0 {
 		if err := run.Command("systemctl", "daemon-reload"); err != nil {
+			for _, service := range requiresRestart {
+				a.pendingEnable[service.Name()] = true
+				a.pendingRestart[service.Name()] = true
+			}
+
 			errs = append(errs, fmt.Errorf("error reloading systemd daemon: %w", err))
 			return errors.Join(errs...)
 		}
+	}
 
-		for _, service := range requiresRestart {
-			logger.Info("enable service", "service", service.Name())
-			if err := run.Command("systemctl", "enable", service.Name()); err != nil {
-				slog.Warn("failed to enable service, ignoring", "service", service.Name())
-			}
+	for _, service := range requiresRestart {
+		if err := a.enable(logger, service); err != nil {
+			errs = append(errs, err)
+		}
 
-			logger.Info("restart service", "service", service.Name())
-			if err := run.Command("systemctl", "restart", service.Name()); err != nil {
-				slog.Warn("failed to restart service, ignoring", "service", service.Name())
-			}
+		if err := a.restart(logger, service); err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	for _, service := range requiresEnable {
+		if err := a.enable(logger, service); err != nil {
+			errs = append(errs, err)
 		}
 	}
 
 	return errors.Join(errs...)
+}
+
+func (a *Applier) enable(logger *slog.Logger, service Service) error {
+	name := service.Name()
+	logger.Info("enable service", "service", name)
+	if err := run.Command("systemctl", "enable", name); err != nil {
+		logger.Error("failed to enable service, retrying later", "service", name, "err", err.Error())
+		a.pendingEnable[name] = true
+		return fmt.Errorf("cannot enable service %s: %w", name, err)
+	}
+
+	delete(a.pendingEnable, name)
+	return nil
+}
+
+func (a *Applier) restart(logger *slog.Logger, service Service) error {
+	name := service.Name()
+	logger.Info("restart service", "service", name)
+	if err := run.Command("systemctl", "restart", name); err != nil {
+		logger.Error("failed to restart service, retrying later", "service", name, "err", err.Error())
+		a.pendingRestart[name] = true
+		return fmt.Errorf("cannot restart service %s: %w", name, err)
+	}
+
+	delete(a.pendingRestart, name)
+	return nil
+}
+
+// forgetUndeclared drops the pending actions of services which are not declared anymore.
+func (a *Applier) forgetUndeclared(cfg configuration.Runner) {
+	for _, pending := range []map[string]bool{a.pendingEnable, a.pendingRestart} {
+		for name := range pending {
+			if !isDeclared(cfg, NewService(name)) {
+				delete(pending, name)
+			}
+		}
+	}
 }
 
 func categorizeServices(logger *slog.Logger, cfg configuration.Runner) (keep []Service, remove []Service, err error) {
